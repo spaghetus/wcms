@@ -1,0 +1,80 @@
+[comment]
+Comments won't be emitted in any of the rendering modes.
+Blocks are ended by a double-line-feed or double-CRLF.
+
+[speech]
+This section will be emitted in text and speech, but not in slideshows.
+Each line in a text block is a paragraph.
+
+[text]
+This section is emitted in all rendering modes.
+
+[remark]
+Remarks are voiced, but not displayed in any rendering mode.
+
+[comment]
+Images are rendered in all rendering modes, but in speech mode the alt text will be read out instead.
+
+[image svg (A red circle)]
+<circle cx="50" cy="50" r="40" stroke="black" stroke-width="3" fill="red" />
+
+[image png (A pixel art character)]
+H4sIAAAAAAACA519ZVAcX/Rlj+AuAYLzw0OwEFxmcLdAAgnuEJzgOjgEt2DBCR4gCcHdCQ7BgxPc
+3WcnW/X/trW1tR+g37yemn73vnPPOXe6KSI11OTxsCmxAQDAU1SQeQUAINQQaMdER/3eO2ixRB1A
+... (base64) ...
+xunt4a5bF4qM5Ojwv/nSijQdyMjzdf/dPsKe0A340KSKAstJwf98jw/0IMH1j3ImsRhWav/+KZqi
+rJpMpZRx0P8CnUjiuzRtAAA=
+
+[+horizontal]
+[speech]
++Groups need an explicit -group to end, and can have children.
+Children of horizontal blocks get equal shares of the screen.
+
+[text size=2]
+In a horizontal block, you can give a block a size value to change how much space it gets.
+
+[image link]
+https://m.media-amazon.com/images/M/MV5BZDc4ZTZmOTItNjJlMy00YTE5LWE5NGMtMjE2M2JjNTA0ODdiXkEyXkFqcGdeQXVyMTA0MTM5NjI2._V1_.jpg
+
+[-horizontal]
+
+[image latex (Two to the third)]
+2^3
+
+[+manim]
+[manim (A pink circle appears.)]
+circle = Circle()  # create a circle
+circle.set_fill(PINK, opacity=0.5)  # set color and transparency
+
+square = Square()  # create a square
+square.rotate(PI / 4)  # rotate a certain amount
+
+self.play(Create(square))  # animate the creation of the square
+
+[speech]
+This is a "Manim" section. Manim sections are read as alt text in audio, synced to speech in video, and follow the viewport in text.
+Manim blocks will fail to render if manim isn't available in the $PATH.
+
+[manim (The circle becomes a square, rotated 45 degrees.)]
+self.play(Transform(square, circle))  # interpolate the square into the circle
+self.play(FadeOut(square))  # fade out animation
+
+[speech]
+If a visual block appears in a manim group, it will be overlaid until another manim block appears.
+
+[-manim]
+
+[+horizontal]
+[speech]
+Nested elements
+
+[+manim]
+[manim (No-op)]
+print("Hello, world!")
+
+[-manim]
+
+[comment]
+Let's see how this works
+
+[-horizontal]
