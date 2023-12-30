@@ -186,11 +186,25 @@ fn body() -> impl Parser<char, Body, Error = Simple<char>> {
 #[derive(Debug, PartialEq, Eq, Clone, strum_macros::EnumDiscriminants)]
 #[strum_discriminants(derive(Hash))]
 pub enum Token {
-	BlockHeader(BlockHeader, Range<usize>),
-	GroupHeader(GroupHeader, Range<usize>),
-	GroupFooter(GroupFooter, Range<usize>),
-	BodyLine(Body, Range<usize>),
-	ParseError(Range<usize>),
+	BlockHeader(BlockHeader),
+	GroupHeader(GroupHeader),
+	GroupFooter(GroupFooter),
+	Body(Body),
+	ParseError,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpannedToken {
+	span: Range<usize>,
+	token: Token,
+}
+
+impl Deref for SpannedToken {
+	type Target = Token;
+
+	fn deref(&self) -> &Self::Target {
+		&self.token
+	}
 }
 
 impl Display for TokenDiscriminants {
@@ -201,39 +215,54 @@ impl Display for TokenDiscriminants {
 
 impl Token {
 	#[must_use]
-	pub fn span(&self) -> Range<usize> {
-		match self {
-			Token::BlockHeader(_, span)
-			| Token::GroupHeader(_, span)
-			| Token::GroupFooter(_, span)
-			| Token::BodyLine(_, span)
-			| Token::ParseError(span) => span.clone(),
-		}
-	}
-	#[must_use]
 	pub fn name(&self) -> &'static str {
 		match self {
-			Token::BlockHeader(_, _) => "BlockHeader",
-			Token::GroupHeader(_, _) => "GroupHeader",
-			Token::GroupFooter(_, _) => "GroupFooter",
-			Token::BodyLine(_, _) => "BodyLine",
-			Token::ParseError(_) => "ParseError",
+			Token::BlockHeader(_) => "BlockHeader",
+			Token::GroupHeader(_) => "GroupHeader",
+			Token::GroupFooter(_) => "GroupFooter",
+			Token::Body(_) => "BodyLine",
+			Token::ParseError => "ParseError",
 		}
 	}
 }
 
-fn tokens() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
+macro_rules! spanned_token_impl {
+	($variant:ident) => {
+		pub fn $variant(h: $variant, span: Range<usize>) -> Self {
+			Self {
+				span,
+				token: Token::$variant(h),
+			}
+		}
+	};
+}
+
+#[allow(non_snake_case)]
+impl SpannedToken {
+	spanned_token_impl!(BlockHeader);
+	spanned_token_impl!(GroupHeader);
+	spanned_token_impl!(GroupFooter);
+	spanned_token_impl!(Body);
+	pub fn ParseError(span: Range<usize>) -> Self {
+		Self {
+			span,
+			token: Token::ParseError,
+		}
+	}
+}
+
+fn tokens() -> impl Parser<char, Vec<SpannedToken>, Error = Simple<char>> {
 	group_header()
-		.map_with_span(Token::GroupHeader)
-		.or(group_footer().map_with_span(Token::GroupFooter))
-		.or(block_header().map_with_span(Token::BlockHeader))
-		.or(body().map_with_span(Token::BodyLine))
+		.map_with_span(SpannedToken::GroupHeader)
+		.or(group_footer().map_with_span(SpannedToken::GroupFooter))
+		.or(block_header().map_with_span(SpannedToken::BlockHeader))
+		.or(body().map_with_span(SpannedToken::Body))
 		.recover_with(skip_parser(
 			newline()
 				.not()
 				.repeated()
 				.at_least(1)
-				.map_with_span(|_, span| Token::ParseError(span)),
+				.map_with_span(|_, span| SpannedToken::ParseError(span)),
 		))
 		.repeated()
 		.then_ignore(end())
@@ -279,18 +308,25 @@ impl Section {
 		}
 	}
 
-	pub(crate) fn consume_from_iter<I: Iterator<Item = Token>>(
+	pub(crate) fn consume_from_iter<I: Iterator<Item = SpannedToken>>(
 		iter: &mut Peekable<I>,
 	) -> Result<Option<Section>, Simple<TokenDiscriminants>> {
 		let Some(first) = iter.next() else {
 			return Ok(None);
 		};
-		match first {
-			Token::BodyLine(text, _span) if text.0.trim().is_empty() => Ok(None),
-			Token::BlockHeader(header, mut span) => {
+		let mut span = first.span.clone();
+		match first.token {
+			Token::Body(text) if text.0.trim().is_empty() => Ok(None),
+			Token::BlockHeader(header) => {
 				let mut content = Vec::new();
-				while iter.peek().map(Into::into) == Some(TokenDiscriminants::BodyLine) {
-					let Some(Token::BodyLine(Body(text), line_span)) = iter.next() else {
+				while iter.peek().map(|s| &s.token).map(Into::into)
+					== Some(TokenDiscriminants::Body)
+				{
+					let Some(SpannedToken {
+						token: Token::Body(Body(text)),
+						span: line_span,
+					}) = iter.next()
+					else {
 						unreachable!()
 					};
 					content.push(text);
@@ -303,10 +339,14 @@ impl Section {
 					span,
 				}))
 			}
-			Token::GroupHeader(GroupHeader(header), mut span) => {
+			Token::GroupHeader(GroupHeader(header)) => {
 				let mut content = Vec::new();
 				loop {
-					if let Some(Token::GroupFooter(GroupFooter(text), footer_span)) = iter.peek() {
+					if let Some(SpannedToken {
+						token: Token::GroupFooter(GroupFooter(text)),
+						span: footer_span,
+					}) = iter.peek()
+					{
 						span.end = span.end.max(footer_span.end);
 						if text == &header.name {
 							iter.next();
@@ -341,7 +381,7 @@ impl Section {
 				}
 			}
 			other => Err(Simple::expected_input_found(
-				other.span(),
+				span,
 				[
 					Some(TokenDiscriminants::BlockHeader),
 					Some(TokenDiscriminants::GroupHeader),
@@ -360,20 +400,20 @@ fn stress_test_sections() {
 	let _sections = dbg!(tokens_to_sections(&tokens).unwrap_or_ariadne(input));
 }
 
-/// Parse a string to a set of tokens.
+/// Parse a string to a sequence of tokens.
 ///
 /// # Errors
-/// Returns a list of parsing errors, if we can.
-pub fn string_to_tokens(input: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
+/// Returns a list of parsing errors, if they occurred.
+pub fn string_to_tokens(input: &str) -> Result<Vec<SpannedToken>, Vec<Simple<char>>> {
 	tokens().parse(input)
 }
 
-/// Parse a string to a set of tokens.
+/// Parse a sequence of tokens to a sequence of sections.
 ///
 /// # Errors
-/// Returns a list of parsing errors, if we can.
+/// Returns a list of parsing errors, if they occurred.
 pub fn tokens_to_sections(
-	input: &[Token],
+	input: &[SpannedToken],
 ) -> Result<Vec<Section>, Vec<Simple<TokenDiscriminants>>> {
 	let mut input = input.iter().cloned().peekable();
 	let mut sections = Vec::new();
