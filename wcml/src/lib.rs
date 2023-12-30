@@ -3,6 +3,7 @@ use chumsky::{
 	text::{newline, whitespace},
 	Parser,
 };
+use serde::de::DeserializeOwned;
 use std::{
 	collections::{HashMap, HashSet},
 	convert::Into,
@@ -272,7 +273,7 @@ fn tokens() -> impl Parser<char, Vec<SpannedToken>, Error = Simple<char>> {
 fn stress_test_objects() {
 	use unwrap_or_ariadne::UnwrapOrAriadne;
 	let parser = tokens();
-	let input = include_str!("../../test.wcms");
+	let input = include_str!("../../test.wcml");
 	let parsed = parser.parse(input).unwrap_or_ariadne(input);
 	println!("{parsed:#?}");
 }
@@ -394,10 +395,12 @@ impl Section {
 
 #[test]
 fn stress_test_sections() {
+	use serde_yaml::Value;
 	use unwrap_or_ariadne::UnwrapOrAriadne;
-	let input = include_str!("../../test.wcms");
+
+	let input = include_str!("../../test.wcml");
 	let tokens = dbg!(string_to_tokens(input).unwrap_or_ariadne(input));
-	let _sections = dbg!(tokens_to_sections(&tokens).unwrap_or_ariadne(input));
+	let (frontmatter, _sections) = dbg!(tokens_to_sections(&tokens).unwrap_or_ariadne(input));
 }
 
 /// Parse a string to a sequence of tokens.
@@ -414,10 +417,26 @@ pub fn string_to_tokens(input: &str) -> Result<Vec<SpannedToken>, Vec<Simple<cha
 /// Returns a list of parsing errors, if they occurred.
 pub fn tokens_to_sections(
 	input: &[SpannedToken],
-) -> Result<Vec<Section>, Vec<Simple<TokenDiscriminants>>> {
+) -> Result<(String, Vec<Section>), Vec<Simple<TokenDiscriminants>>> {
 	let mut input = input.iter().cloned().peekable();
 	let mut sections = Vec::new();
 	let mut errors = Vec::new();
+
+	let mut frontmatter = String::new();
+	// Leading body lines are frontmatter
+	while input.peek().map(|t| (&t.token).into()) == Some(TokenDiscriminants::Body) {
+		let Some(SpannedToken {
+			span: _,
+			token: Token::Body(Body(text)),
+		}) = input.next()
+		else {
+			unreachable!()
+		};
+		frontmatter.push_str(&format!(
+			"{}{text}",
+			if frontmatter.is_empty() { "" } else { "\n" }
+		));
+	}
 
 	while input.peek().is_some() {
 		match Section::consume_from_iter(&mut input) {
@@ -428,7 +447,7 @@ pub fn tokens_to_sections(
 	}
 
 	if errors.is_empty() {
-		Ok(sections)
+		Ok((frontmatter, sections))
 	} else {
 		Err(errors)
 	}

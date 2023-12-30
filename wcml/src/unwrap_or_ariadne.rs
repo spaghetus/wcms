@@ -1,6 +1,7 @@
 use std::{fmt::Display, hash::Hash};
 
 use chumsky::prelude::*;
+use serde_yaml::Value;
 pub trait UnwrapOrAriadne<OK> {
 	fn unwrap_or_ariadne(self, src: &str) -> OK;
 }
@@ -43,5 +44,30 @@ where
 		}
 		report.finish().print(("input", Source::from(src))).unwrap();
 		panic!("Failed to parse document");
+	}
+}
+
+impl<OK> UnwrapOrAriadne<OK> for Result<OK, serde_yaml::Error> {
+	fn unwrap_or_ariadne(self, src: &str) -> OK {
+		use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
+
+		#[allow(clippy::range_plus_one)]
+		let (msg, span) = match self {
+			Ok(ok) => return ok,
+			Err(e) => (
+				e.to_string(),
+				e.location()
+					.map_or(0..1, |loc| loc.index()..loc.index() + 1),
+			),
+		};
+
+		let mut colors = ColorGenerator::new();
+
+		Report::build(ReportKind::Error, "input", span.start)
+			.with_label(Label::new(("input", span)).with_message(msg.fg(colors.next())))
+			.finish()
+			.print(("input", Source::from(src)))
+			.unwrap();
+		panic!("Failed to parse document")
 	}
 }

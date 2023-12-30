@@ -1,5 +1,5 @@
 [package]
-name = "wcms_syntax"
+name = "wcml"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 ariadne = { version = "0.3.0", optional = true }
 chumsky = "0.9.3"
+serde = "1.0.193"
+serde_yaml = "0.9.29"
 strum = "0.25.0"
 strum_macros = "0.25.3"
 
