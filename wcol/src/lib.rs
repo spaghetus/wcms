@@ -3,7 +3,6 @@ use chumsky::{
 	text::{newline, whitespace},
 	Parser,
 };
-use serde::de::DeserializeOwned;
 use std::{
 	collections::{HashMap, HashSet},
 	convert::Into,
@@ -275,7 +274,7 @@ fn tokens() -> impl Parser<char, Vec<SpannedToken>, Error = Simple<char>> {
 fn stress_test_objects() {
 	use unwrap_or_ariadne::UnwrapOrAriadne;
 	let parser = tokens();
-	let input = include_str!("../../test.wcml");
+	let input = include_str!("../../test.wcol");
 	let parsed = parser.parse(input).unwrap_or_ariadne(input);
 	println!("{parsed:#?}");
 }
@@ -397,12 +396,11 @@ impl Section {
 
 #[test]
 fn stress_test_sections() {
-	use serde_yaml::Value;
 	use unwrap_or_ariadne::UnwrapOrAriadne;
 
-	let input = include_str!("../../test.wcml");
+	let input = include_str!("../../test.wcol");
 	let tokens = dbg!(string_to_tokens(input).unwrap_or_ariadne(input));
-	let (frontmatter, _sections) = dbg!(tokens_to_sections(&tokens).unwrap_or_ariadne(input));
+	let (_frontmatter, _sections) = dbg!(tokens_to_sections(&tokens).unwrap_or_ariadne(input));
 }
 
 /// Parse a string to a sequence of tokens.

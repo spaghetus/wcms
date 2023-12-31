@@ -1,7 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
 use chumsky::prelude::*;
-use serde_yaml::Value;
 pub trait UnwrapOrAriadne<OK> {
 	fn unwrap_or_ariadne(self, src: &str) -> OK;
 }
