@@ -229,6 +229,7 @@ impl Token {
 
 macro_rules! spanned_token_impl {
 	($variant:ident) => {
+		#[must_use]
 		pub fn $variant(h: $variant, span: Range<usize>) -> Self {
 			Self {
 				span,
@@ -244,6 +245,7 @@ impl SpannedToken {
 	spanned_token_impl!(GroupHeader);
 	spanned_token_impl!(GroupFooter);
 	spanned_token_impl!(Body);
+	#[must_use]
 	pub fn ParseError(span: Range<usize>) -> Self {
 		Self {
 			span,
